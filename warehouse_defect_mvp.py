@@ -63,20 +63,19 @@ if uploaded_file is not None:
     res = results[0]
 
     # ----------------------------
-    # Extract classification predictions
+    # Extract classification predictions (YOLOv8 v8+)
     # ----------------------------
     preds = []
-    if hasattr(res, 'probs') and res.probs is not None:
-        probs = res.probs[0].tolist()  # convert tensor to list
+    if hasattr(res, 'pred') and res.pred is not None:
+        probs = res.pred[0].tolist()  # get probabilities for the first image
         for idx, conf in enumerate(probs):
-            name = res.names[idx]
+            name = res.names[idx]      # class name
             preds.append((name, conf))
 
     # ----------------------------
     # Display predictions
     # ----------------------------
     if preds:
-        # Sort by confidence descending
         preds_sorted = sorted(preds, key=lambda x: x[1], reverse=True)
         top_class, top_conf = preds_sorted[0]
 
