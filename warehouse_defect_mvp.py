@@ -1,51 +1,36 @@
+import os
 import streamlit as st
-from ultralytics import YOLO
 from PIL import Image
+from ultralytics import YOLO
+import gdown
 
-# ===============================
-# Load your trained YOLO model
-# ===============================
-MODEL_PATH = r"C:\Users\WinsonLu\runs\classify\train23\weights\best.pt"
+# --- Model setup ---
+MODEL_PATH = "best.pt"
+
+# Automatically download model if it doesn't exist
+if not os.path.exists(MODEL_PATH):
+    st.info("Downloading model, please wait...")
+    url = "https://drive.google.com/file/d/1fOeD5p2bdG-VkgNq7-QNJmlXp5_DaPm1/view?usp=drive_link"  # <-- replace with your Google Drive file ID
+    gdown.download(url, MODEL_PATH, quiet=False)
+    st.success("Model downloaded!")
+
+# Load YOLO model
 model = YOLO(MODEL_PATH)
 
-# ===============================
-# Streamlit UI
-# ===============================
-st.set_page_config(page_title="Warehouse Defect Classifier", layout="centered")
+# --- Streamlit UI ---
+st.title("Warehouse Concrete Defect Detection")
+st.write("Upload an image of concrete surfaces and detect defects.")
 
-st.title("🏗️ Warehouse Defect Classification")
-st.write("Upload one or more images and the model will classify them.")
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
-# Upload multiple images
-uploaded_files = st.file_uploader(
-    "📂 Upload images",
-    type=["jpg", "jpeg", "png"],
-    accept_multiple_files=True
-)
-
-if uploaded_files:
-    for uploaded_file in uploaded_files:
-        st.write("---")  # separator
-        st.write(f"### File: {uploaded_file.name}")
-
-        # Open image
-        image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Uploaded Image", use_column_width=True)
-
-        # Run classification
-        with st.spinner("🔍 Classifying..."):
-            results = model(image)
-
-        # Get prediction
-        probs = results[0].probs
-        class_names = results[0].names
-        top_idx = probs.top1
-        confidence = probs.top1conf.item()
-
-        st.subheader("✅ Prediction Result")
-        st.write(f"**{class_names[top_idx]}** ({confidence:.2%} confidence)")
-
-        # Show all probabilities
-        st.subheader("📊 Class Probabilities")
-        prob_dict = {class_names[i]: p for i, p in enumerate(probs.data.tolist())}
-        st.bar_chart(prob_dict)
+if uploaded_file is not None:
+    # Open the image
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Uploaded Image", use_column_width=True)
+    
+    # Run detection
+    results = model(image)
+    
+    # Render results
+    annotated_image = results[0].plot()  # annotated image as numpy array
+    st.image(annotated_image, caption="Detected Defects", use_column_width=True)
