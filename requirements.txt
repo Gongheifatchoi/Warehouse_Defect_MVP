@@ -4,3 +4,4 @@ torch
 Pillow
 opencv-python-headless
 gdown
+pandas
