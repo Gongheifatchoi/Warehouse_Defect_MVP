@@ -10,7 +10,7 @@ MODEL_PATH = "best.pt"
 # Automatically download model if it doesn't exist
 if not os.path.exists(MODEL_PATH):
     st.info("Downloading model, please wait...")
-    url = "https://drive.google.com/file/d/1fOeD5p2bdG-VkgNq7-QNJmlXp5_DaPm1/view?usp=drive_link"  # <-- replace with your Google Drive file ID
+    url = f"https://drive.google.com/uc?id=1fOeD5p2bdG-VkgNq7-QNJmlXp5_DaPm1"  # <-- replace with your Google Drive file ID
     gdown.download(url, MODEL_PATH, quiet=False)
     st.success("Model downloaded!")
 
@@ -34,3 +34,4 @@ if uploaded_file is not None:
     # Render results
     annotated_image = results[0].plot()  # annotated image as numpy array
     st.image(annotated_image, caption="Detected Defects", use_column_width=True)
+
