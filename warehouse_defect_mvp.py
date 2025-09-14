@@ -34,7 +34,6 @@ def download_model_with_progress(url=MODEL_URL, path=MODEL_PATH):
     st.success("Model downloaded!")
     return path
 
-# Download model
 model_file = download_model_with_progress()
 
 @st.cache_resource(show_spinner=False)
@@ -56,8 +55,8 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file)
     st.image(image, caption="Uploaded Image", use_column_width=True)
 
-    # Run YOLO
-    results = model(image)
+    # Run YOLO with lower threshold for debugging
+    results = model(image, conf=0.1)
     res = results[0]
 
     preds = []
@@ -73,15 +72,22 @@ if uploaded_file is not None:
                 preds.append((name, conf))
 
     # ----------------------------
-    # 3b. Detection
+    # 3b. Detection with visualization
     # ----------------------------
     elif model.task == "detect":
-        if hasattr(res, 'boxes') and len(res.boxes) > 0:
+        st.write(f"Number of boxes detected: {len(res.boxes)}")
+        if len(res.boxes) > 0:
             for box in res.boxes:
                 cls_idx = int(box.cls[0])
                 conf = float(box.conf[0])
                 name = res.names[cls_idx]
                 preds.append((name, conf))
+            
+            # Render boxes on image
+            annotated_image = res.plot()  # returns np.array
+            st.image(annotated_image, caption="Detections", use_column_width=True)
+        else:
+            st.write("No boxes detected. Try adjusting the image or check training data.")
 
     # ----------------------------
     # 4. Display predictions
@@ -96,5 +102,3 @@ if uploaded_file is not None:
         df = pd.DataFrame(preds_sorted, columns=["Class", "Confidence"])
         st.write("📊 All Class Probabilities / Detections")
         st.dataframe(df)
-    else:
-        st.write("No predictions available.")
