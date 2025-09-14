@@ -2,8 +2,7 @@ import os
 import streamlit as st
 from PIL import Image
 from ultralytics import YOLO
-import pandas as pd
-import requests
+import gdown
 
 # ----------------------------
 # 1. Model setup
@@ -12,93 +11,42 @@ MODEL_PATH = "best.pt"
 MODEL_URL = "https://drive.google.com/uc?export=download&id=1fOeD5p2bdG-VkgNq7-QNJmlXp5_DaPm1"
 
 @st.cache_data(show_spinner=False)
-def download_model_with_progress(url=MODEL_URL, path=MODEL_PATH):
-    if os.path.exists(path):
-        return path
-
-    st.info("Downloading YOLO model, please wait...")
-    
-    response = requests.get(url, stream=True)
-    total_size = int(response.headers.get('content-length', 0))
-    block_size = 1024
-    progress_bar = st.progress(0.0)
-
-    downloaded = 0
-    with open(path, 'wb') as f:
-        for data in response.iter_content(block_size):
-            f.write(data)
-            downloaded += len(data)
-            if total_size > 0:
-                progress_bar.progress(min(downloaded / total_size, 1.0))
-    
-    st.success("Model downloaded!")
+def download_model(url=MODEL_URL, path=MODEL_PATH):
+    if not os.path.exists(path):
+        st.info("Downloading YOLO model, please wait...")
+        # Remove existing file to allow overwrite
+        if os.path.exists(path):
+            os.remove(path)
+        gdown.download(url, path, quiet=False, fuzzy=True)
+        st.success("Model downloaded!")
     return path
 
-model_file = download_model_with_progress()
+# Ensure model is downloaded
+model_file = download_model()
 
+# Load YOLO model
 @st.cache_resource(show_spinner=False)
 def load_yolo_model(model_path):
     return YOLO(model_path)
 
 model = load_yolo_model(model_file)
-st.write(f"Loaded model task: `{model.task}`")  # detect or classify
 
 # ----------------------------
 # 2. Streamlit UI
 # ----------------------------
-st.title("🏭 Warehouse Concrete Defect Detection/Classification")
+st.title("Warehouse Concrete Defect Detection")
 st.write("Upload an image of concrete surfaces to detect defects.")
 
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
+    # Open the image
     image = Image.open(uploaded_file)
     st.image(image, caption="Uploaded Image", use_column_width=True)
 
-    # Run YOLO with lower threshold for debugging
-    results = model(image, conf=0.1)
-    res = results[0]
+    # Run detection
+    results = model(image)
 
-    preds = []
-
-    # ----------------------------
-    # 3a. Classification
-    # ----------------------------
-    if model.task == "classify":
-        if hasattr(res, 'pred') and res.pred is not None:
-            probs = res.pred[0].tolist()
-            for idx, conf in enumerate(probs):
-                name = res.names[idx]
-                preds.append((name, conf))
-
-    # ----------------------------
-    # 3b. Detection with visualization
-    # ----------------------------
-    elif model.task == "detect":
-        st.write(f"Number of boxes detected: {len(res.boxes)}")
-        if len(res.boxes) > 0:
-            for box in res.boxes:
-                cls_idx = int(box.cls[0])
-                conf = float(box.conf[0])
-                name = res.names[cls_idx]
-                preds.append((name, conf))
-            
-            # Render boxes on image
-            annotated_image = res.plot()  # returns np.array
-            st.image(annotated_image, caption="Detections", use_column_width=True)
-        else:
-            st.write("No boxes detected. Try adjusting the image or check training data.")
-
-    # ----------------------------
-    # 4. Display predictions
-    # ----------------------------
-    if preds:
-        preds_sorted = sorted(preds, key=lambda x: x[1], reverse=True)
-        top_class, top_conf = preds_sorted[0]
-
-        st.write("✅ Prediction Result")
-        st.write(f"{top_class} ({top_conf*100:.2f}% confidence)")
-
-        df = pd.DataFrame(preds_sorted, columns=["Class", "Confidence"])
-        st.write("📊 All Class Probabilities / Detections")
-        st.dataframe(df)
+    # Annotated image
+    annotated_image = results[0].plot()
+    st.image(annotated_image, caption="Detected Defects", use_column_width=True)
