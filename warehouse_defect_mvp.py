@@ -3,6 +3,7 @@ import streamlit as st
 from PIL import Image
 from ultralytics import YOLO
 import gdown
+import pandas as pd
 
 # ----------------------------
 # 1. Model setup
@@ -12,9 +13,9 @@ MODEL_URL = "https://drive.google.com/uc?export=download&id=1fOeD5p2bdG-VkgNq7-Q
 
 @st.cache_data(show_spinner=False)
 def download_model(url=MODEL_URL, path=MODEL_PATH):
+    """Download YOLO model if not exists."""
     if not os.path.exists(path):
         st.info("Downloading YOLO model, please wait...")
-        # Remove existing file to allow overwrite
         if os.path.exists(path):
             os.remove(path)
         gdown.download(url, path, quiet=False, fuzzy=True)
@@ -24,9 +25,9 @@ def download_model(url=MODEL_URL, path=MODEL_PATH):
 # Ensure model is downloaded
 model_file = download_model()
 
-# Load YOLO model
 @st.cache_resource(show_spinner=False)
 def load_yolo_model(model_path):
+    """Load YOLO model once and cache it."""
     return YOLO(model_path)
 
 model = load_yolo_model(model_file)
@@ -44,9 +45,23 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file)
     st.image(image, caption="Uploaded Image", use_column_width=True)
 
-    # Run detection
+    # Run YOLO detection
     results = model(image)
-
-    # Annotated image
     annotated_image = results[0].plot()
     st.image(annotated_image, caption="Detected Defects", use_column_width=True)
+
+    # Extract predictions
+    res = results[0]
+    preds = [(res.names[int(box.cls[0])], float(box.conf[0])) for box in res.boxes]
+
+    if preds:
+        st.write("✅ Prediction Result")
+        for name, conf in preds:
+            st.write(f"{name} ({conf*100:.2f}% confidence)")
+
+        # Show probabilities as a table
+        df = pd.DataFrame(preds, columns=["Class", "Confidence"])
+        st.write("📊 Class Probabilities")
+        st.dataframe(df)
+    else:
+        st.write("No defects detected.")
