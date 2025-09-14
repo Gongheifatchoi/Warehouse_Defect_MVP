@@ -4,22 +4,38 @@ from PIL import Image
 from ultralytics import YOLO
 import gdown
 
-# --- Model setup ---
+# ----------------------------
+# 1. Model setup
+# ----------------------------
 MODEL_PATH = "best.pt"
+MODEL_URL = "https://drive.google.com/uc?export=download&id=1fOeD5p2bdG-VkgNq7-QNJmlXp5_DaPm1"
 
-# Automatically download model if it doesn't exist
-if not os.path.exists(MODEL_PATH):
-    st.info("Downloading model, please wait...")
-    url = f"https://drive.google.com/uc?id=1fOeD5p2bdG-VkgNq7-QNJmlXp5_DaPm1"  # <-- replace with your Google Drive file ID
-    gdown.download(url, MODEL_PATH, quiet=False)
-    st.success("Model downloaded!")
+@st.cache_data(show_spinner=False)
+def download_model(url=MODEL_URL, path=MODEL_PATH):
+    if not os.path.exists(path):
+        st.info("Downloading YOLO model, please wait...")
+        # Remove existing file to allow overwrite
+        if os.path.exists(path):
+            os.remove(path)
+        gdown.download(url, path, quiet=False, fuzzy=True)
+        st.success("Model downloaded!")
+    return path
+
+# Ensure model is downloaded
+model_file = download_model()
 
 # Load YOLO model
-model = YOLO(MODEL_PATH)
+@st.cache_resource(show_spinner=False)
+def load_yolo_model(model_path):
+    return YOLO(model_path)
 
-# --- Streamlit UI ---
+model = load_yolo_model(model_file)
+
+# ----------------------------
+# 2. Streamlit UI
+# ----------------------------
 st.title("Warehouse Concrete Defect Detection")
-st.write("Upload an image of concrete surfaces and detect defects.")
+st.write("Upload an image of concrete surfaces to detect defects.")
 
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
@@ -27,11 +43,10 @@ if uploaded_file is not None:
     # Open the image
     image = Image.open(uploaded_file)
     st.image(image, caption="Uploaded Image", use_column_width=True)
-    
+
     # Run detection
     results = model(image)
-    
-    # Render results
-    annotated_image = results[0].plot()  # annotated image as numpy array
-    st.image(annotated_image, caption="Detected Defects", use_column_width=True)
 
+    # Annotated image
+    annotated_image = results[0].plot()
+    st.image(annotated_image, caption="Detected Defects", use_column_width=True)
