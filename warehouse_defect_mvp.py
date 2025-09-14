@@ -13,7 +13,7 @@ MODEL_URL = "https://drive.google.com/uc?export=download&id=1fOeD5p2bdG-VkgNq7-Q
 
 @st.cache_data(show_spinner=False)
 def download_model(url=MODEL_URL, path=MODEL_PATH):
-    """Download YOLO model if not exists."""
+    """Download YOLO model if it doesn't exist."""
     if not os.path.exists(path):
         st.info("Downloading YOLO model, please wait...")
         if os.path.exists(path):
@@ -50,16 +50,28 @@ if uploaded_file is not None:
     annotated_image = results[0].plot()
     st.image(annotated_image, caption="Detected Defects", use_column_width=True)
 
-    # Extract predictions
+    # ----------------------------
+    # Extract predictions safely
+    # ----------------------------
     res = results[0]
-    preds = [(res.names[int(box.cls[0])], float(box.conf[0])) for box in res.boxes]
+    preds = []
 
+    if hasattr(res, 'boxes') and len(res.boxes) > 0:
+        for i in range(len(res.boxes)):
+            cls_idx = int(res.boxes.cls[i])       # class index
+            conf = float(res.boxes.conf[i])      # confidence
+            name = res.names[cls_idx]            # class name
+            preds.append((name, conf))
+
+    # ----------------------------
+    # Display predictions
+    # ----------------------------
     if preds:
         st.write("✅ Prediction Result")
         for name, conf in preds:
             st.write(f"{name} ({conf*100:.2f}% confidence)")
 
-        # Show probabilities as a table
+        # Display as a table
         df = pd.DataFrame(preds, columns=["Class", "Confidence"])
         st.write("📊 Class Probabilities")
         st.dataframe(df)
