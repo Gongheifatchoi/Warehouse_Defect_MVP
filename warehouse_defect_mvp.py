@@ -5,6 +5,7 @@ from ultralytics import YOLO
 import gdown
 import requests
 import json
+import time
 
 # ----------------------------
 # 1. Model setup
@@ -35,14 +36,29 @@ def load_yolo_model(model_path):
 model = load_yolo_model(model_file)
 
 # ----------------------------
-# 2. Hugging Face LLM Integration (Updated)
+# 2. Hugging Face LLM Integration (Updated with proper auth)
 # ----------------------------
 def get_llm_commentary(defects_info):
     """
-    Get AI commentary on detected defects using a public Hugging Face model
+    Get AI commentary on detected defects using Hugging Face API with proper authentication
     """
-    # Using a public model that doesn't require API key
-    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
+    # Get API key from Streamlit secrets
+    try:
+        # Try different possible secret names
+        if 'HUGGINGFACEHUB_API_TOKEN' in st.secrets:
+            api_key = st.secrets['HUGGINGFACEHUB_API_TOKEN']
+        elif 'HUGGINGFACE_API_KEY' in st.secrets:
+            api_key = st.secrets['HUGGINGFACE_API_KEY']
+        else:
+            st.error("Hugging Face API token not found in secrets. Please check your secrets configuration.")
+            return "API token configuration error."
+    except Exception as e:
+        st.error(f"Error accessing secrets: {e}")
+        return "Secrets access error."
+    
+    # Using a model that works well with the inference API
+    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+    headers = {"Authorization": f"Bearer {api_key}"}
     
     # Prepare the prompt
     prompt = f"""
@@ -61,22 +77,22 @@ def get_llm_commentary(defects_info):
     payload = {
         "inputs": prompt,
         "parameters": {
-            "max_new_tokens": 300,
+            "max_new_tokens": 400,
             "temperature": 0.3,
-            "do_sample": True
+            "do_sample": True,
+            "return_full_text": False
         }
     }
     
     try:
         with st.spinner("Getting expert analysis from AI..."):
-            response = requests.post(API_URL, json=payload, timeout=60)
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
             
             if response.status_code == 503:
                 # Model is loading, wait and try again
                 st.info("AI model is loading, please wait a moment...")
-                import time
-                time.sleep(15)
-                response = requests.post(API_URL, json=payload, timeout=60)
+                time.sleep(20)
+                response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
             
             response.raise_for_status()
             result = response.json()
@@ -91,19 +107,12 @@ def get_llm_commentary(defects_info):
     except requests.exceptions.Timeout:
         return "The AI analysis is taking too long. Please try again later."
     except requests.exceptions.HTTPError as err:
-        if response.status_code == 503:
-            # Try an alternative model if the first one fails
-            try:
-                alt_api_url = "https://api-inference.huggingface.co/models/google/flan-t5-base"
-                response = requests.post(alt_api_url, json=payload, timeout=60)
-                response.raise_for_status()
-                result = response.json()
-                if isinstance(result, list) and len(result) > 0:
-                    return result[0].get('generated_text', 'No analysis generated')
-            except:
-                return "AI service is temporarily unavailable. Please try again later."
+        if response.status_code == 401:
+            return "Authentication error: Please check your Hugging Face API key."
+        elif response.status_code == 503:
+            return "Model is currently loading. Please try again in a few moments."
         else:
-            return f"Unable to connect to AI service. Please try again later."
+            return f"API Error: {err}"
     except Exception as e:
         return f"Unable to generate AI commentary: {str(e)}"
 
@@ -112,6 +121,14 @@ def get_llm_commentary(defects_info):
 # ----------------------------
 st.title("🏗️ Warehouse Concrete Defect Detection")
 st.write("Upload an image of concrete surfaces to detect defects and receive expert analysis.")
+
+# Check if we have the API key set up
+try:
+    has_api_key = 'HUGGINGFACEHUB_API_TOKEN' in st.secrets or 'HUGGINGFACE_API_KEY' in st.secrets
+    if not has_api_key:
+        st.warning("Hugging Face API key not found in secrets. AI analysis may not work.")
+except:
+    st.warning("Unable to check secrets configuration. AI analysis may not work.")
 
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
@@ -174,6 +191,6 @@ if uploaded_file is not None:
 st.markdown("---")
 st.markdown("""
 **Note**: 
-- AI commentary is provided through Hugging Face's public inference API
+- AI commentary is provided through Hugging Face's inference API
 - Detection accuracy depends on image quality and lighting conditions
 """)
