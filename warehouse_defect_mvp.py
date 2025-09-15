@@ -36,10 +36,13 @@ model = load_yolo_model(model_file)
 # ----------------------------
 # 2. Hugging Face LLM Integration
 # ----------------------------
-def get_llm_commentary(defects_info):
+def get_llm_commentary(defects_info, api_key):
     """
     Get AI commentary on detected defects using Hugging Face's free inference API
     """
+    if not api_key:
+        return "API key is missing. Please enter your Hugging Face API key."
+    
     # Prepare the prompt
     prompt = f"""
     As a structural engineering expert, analyze these concrete defects detected in a warehouse:
@@ -51,12 +54,12 @@ def get_llm_commentary(defects_info):
     3. Recommended actions
     4. Safety implications
     
-    Keep the response concise and professional.
+    Keep the response concise and professional (under 200 words).
     """
     
-    # Hugging Face API endpoint (using a free model like Mistral)
+    # Hugging Face API endpoint (using a free model)
     API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
-    headers = {"Authorization": f"Bearer {st.secrets.get('HUGGINGFACE_API_KEY', '')}"}
+    headers = {"Authorization": f"Bearer {api_key}"}
     
     payload = {
         "inputs": prompt,
@@ -68,18 +71,39 @@ def get_llm_commentary(defects_info):
     }
     
     try:
-        response = requests.post(API_URL, headers=headers, json=payload)
-        response.raise_for_status()
-        result = response.json()
-        return result[0]['generated_text']
+        with st.spinner("Getting expert analysis from AI..."):
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            result = response.json()
+            return result[0]['generated_text']
+    except requests.exceptions.Timeout:
+        return "The AI analysis is taking too long. Please try again later."
+    except requests.exceptions.HTTPError as err:
+        if response.status_code == 401:
+            return "Authentication error: Please check your Hugging Face API key."
+        elif response.status_code == 503:
+            return "The AI model is currently loading. Please try again in a few moments."
+        else:
+            return f"API Error: {err}"
     except Exception as e:
-        return f"Unable to generate AI commentary at this time. Error: {str(e)}"
+        return f"Unable to generate AI commentary: {str(e)}"
 
 # ----------------------------
 # 3. Streamlit UI
 # ----------------------------
-st.title("Warehouse Concrete Defect Detection")
+st.title("🏗️ Warehouse Concrete Defect Detection")
 st.write("Upload an image of concrete surfaces to detect defects and receive expert analysis.")
+
+# Get API key from environment variable or user input
+api_key = os.environ.get("HUGGINGFACE_API_KEY", "")
+
+# If no API key in environment, show input box (for testing only)
+if not api_key:
+    api_key = st.text_input("Enter your Hugging Face API key:", type="password")
+    if api_key:
+        st.success("API key received! You can now use the AI commentary feature.")
+    else:
+        st.info("To enable AI commentary, please enter your Hugging Face API key above.")
 
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
@@ -111,24 +135,25 @@ if uploaded_file is not None:
     
     # Display defect information
     if defects:
-        st.subheader("Detection Results")
-        
-        # Prepare defect information for LLM
-        defects_info = "\n".join([
-            f"- {d['type']} (confidence: {d['confidence']:.2f}) at position {d['location'][0]:.1f}, {d['location'][1]:.1f}"
-            for d in defects
-        ])
+        st.subheader("📊 Detection Results")
         
         # Show defects in a table
         for i, defect in enumerate(defects, 1):
             st.write(f"{i}. **{defect['type']}** ({(defect['confidence']*100):.1f}% confidence)")
         
-        # Get and display LLM commentary
-        with st.spinner("Generating expert analysis..."):
-            commentary = get_llm_commentary(defects_info)
+        # Prepare defect information for LLM
+        defects_info = "\n".join([
+            f"- {d['type']} (confidence: {d['confidence']:.2f})"
+            for d in defects
+        ])
         
-        st.subheader("Expert Analysis")
-        st.write(commentary)
+        # Get and display LLM commentary if API key is available
+        if api_key:
+            commentary = get_llm_commentary(defects_info, api_key)
+            st.subheader("🧠 Expert Analysis")
+            st.write(commentary)
+        else:
+            st.info("AI commentary is disabled. Please provide an API key to enable this feature.")
         
     else:
-        st.success("No defects detected! The concrete surface appears to be in good condition.")
+        st.success("✅ No defects detected! The concrete surface appears to be in good condition.")
