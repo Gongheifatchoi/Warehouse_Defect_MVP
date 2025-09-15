@@ -36,11 +36,11 @@ def load_yolo_model(model_path):
 model = load_yolo_model(model_file)
 
 # ----------------------------
-# 2. Hugging Face LLM Integration (Updated with proper auth)
+# 2. Hugging Face LLM Integration with Llama 3
 # ----------------------------
 def get_llm_commentary(defects_info):
     """
-    Get AI commentary on detected defects using Hugging Face API with proper authentication
+    Get AI commentary on detected defects using Llama 3 via Hugging Face API
     """
     # Get API key from Streamlit secrets
     try:
@@ -56,16 +56,15 @@ def get_llm_commentary(defects_info):
         st.error(f"Error accessing secrets: {e}")
         return "Secrets access error."
     
-    # Using models that are definitely available on Hugging Face inference API
-    models_to_try = [
-        "https://api-inference.huggingface.co/models/google/flan-t5-xxl",
-        "https://api-inference.huggingface.co/models/google/flan-t5-large",
-        "https://api-inference.huggingface.co/models/google/flan-t5-base"
-    ]
+    # Using Meta's Llama 3 7B model - this is available on Hugging Face Inference API
+    API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
+    headers = {"Authorization": f"Bearer {api_key}"}
     
-    # Prepare the prompt
+    # Prepare the prompt in chat format for Llama 3
     prompt = f"""
-    As a structural engineering expert, analyze these concrete defects detected in a warehouse:
+    You are a structural engineering expert analyzing concrete defects in warehouses.
+    
+    Analyze these detected defects:
     {defects_info}
     
     Please provide:
@@ -77,55 +76,88 @@ def get_llm_commentary(defects_info):
     Keep the response concise and professional (under 200 words).
     """
     
-    for api_url in models_to_try:
-        try:
-            headers = {"Authorization": f"Bearer {api_key}"}
-            payload = {
-                "inputs": prompt,
-                "parameters": {
-                    "max_new_tokens": 300,
-                    "temperature": 0.3,
-                    "do_sample": True
-                }
-            }
-            
-            with st.spinner(f"Getting expert analysis from AI using {api_url.split('/')[-1]}..."):
-                response = requests.post(api_url, headers=headers, json=payload, timeout=45)
-                
-                if response.status_code == 503:
-                    # Model is loading, wait and try again
-                    st.info("AI model is loading, please wait a moment...")
-                    time.sleep(15)
-                    response = requests.post(api_url, headers=headers, json=payload, timeout=45)
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    
-                    if isinstance(result, list) and len(result) > 0:
-                        return result[0].get('generated_text', 'No analysis generated')
-                    elif isinstance(result, dict):
-                        return result.get('generated_text', 'No analysis generated')
-                    else:
-                        continue  # Try next model
-                else:
-                    continue  # Try next model
-                    
-        except Exception as e:
-            continue  # Try next model
+    # Format for chat models
+    messages = [
+        {"role": "system", "content": "You are a structural engineering expert with 20+ years of experience in analyzing concrete structures and defects."},
+        {"role": "user", "content": prompt}
+    ]
     
-    return "AI service is temporarily unavailable. Please try again later."
+    payload = {
+        "inputs": messages,
+        "parameters": {
+            "max_new_tokens": 400,
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "do_sample": True,
+            "return_full_text": False
+        }
+    }
+    
+    try:
+        with st.spinner("Getting expert analysis from Llama 3 AI..."):
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+            
+            # Check if model is loading
+            if response.status_code == 503:
+                try:
+                    error_info = response.json()
+                    if 'estimated_time' in error_info:
+                        wait_time = error_info['estimated_time']
+                        st.info(f"Llama 3 model is loading. Estimated wait time: {wait_time:.1f} seconds")
+                        time.sleep(wait_time + 5)
+                        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+                    else:
+                        st.info("Llama 3 model is loading, please wait...")
+                        time.sleep(25)
+                        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+                except:
+                    st.info("Model is loading, please wait...")
+                    time.sleep(25)
+                    response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+            
+            response.raise_for_status()
+            result = response.json()
+            
+            # Parse the response from Llama 3
+            if isinstance(result, list) and len(result) > 0:
+                if 'generated_text' in result[0]:
+                    return result[0]['generated_text']
+                elif isinstance(result[0], dict) and 'generated_text' in result[0]:
+                    return result[0]['generated_text']
+            
+            # Try alternative response format
+            if isinstance(result, dict) and 'generated_text' in result:
+                return result['generated_text']
+                
+            return "Received unexpected response format from AI service."
+                
+    except requests.exceptions.Timeout:
+        return "The AI analysis is taking too long. Please try again later."
+    except requests.exceptions.HTTPError as err:
+        if response.status_code == 401:
+            return "Authentication error: Please check your Hugging Face API key."
+        elif response.status_code == 404:
+            return "Llama 3 model not found. It may not be available on the inference API."
+        elif response.status_code == 503:
+            return "Llama 3 model is currently loading. Please try again in a few minutes."
+        else:
+            return f"API Error: {str(err)}"
+    except Exception as e:
+        return f"Unable to generate AI commentary: {str(e)}"
 
 # ----------------------------
 # 3. Streamlit UI
 # ----------------------------
 st.title("🏗️ Warehouse Concrete Defect Detection")
-st.write("Upload an image of concrete surfaces to detect defects and receive expert analysis.")
+st.write("Upload an image of concrete surfaces to detect defects and receive expert analysis using Llama 3 AI.")
 
 # Check if we have the API key set up
 try:
     has_api_key = 'HUGGINGFACEHUB_API_TOKEN' in st.secrets or 'HUGGINGFACE_API_KEY' in st.secrets
     if not has_api_key:
         st.warning("Hugging Face API key not found in secrets. AI analysis may not work.")
+    else:
+        st.success("Hugging Face API key found! Using Llama 3 for expert analysis.")
 except:
     st.warning("Unable to check secrets configuration. AI analysis may not work.")
 
@@ -174,7 +206,7 @@ if uploaded_file is not None:
         # Get and display LLM commentary
         commentary = get_llm_commentary(defects_info)
         
-        st.subheader("🧠 Expert Analysis")
+        st.subheader("🧠 Expert Analysis (Powered by Llama 3)")
         st.write(commentary)
         
         # Add some general advice based on common defects
@@ -190,6 +222,7 @@ if uploaded_file is not None:
 st.markdown("---")
 st.markdown("""
 **Note**: 
-- AI commentary is provided through Hugging Face's inference API
+- AI commentary is provided by Meta's Llama 3 model through Hugging Face's inference API
 - Detection accuracy depends on image quality and lighting conditions
+- The Llama 3 model may take a few moments to load on first use
 """)
