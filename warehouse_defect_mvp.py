@@ -39,11 +39,7 @@ model = load_yolo_model(model_file)
 def get_llm_commentary(defects_info):
     """
     Get AI commentary on detected defects using Hugging Face's free inference API
-    Using a freely accessible model that doesn't require special permissions
     """
-    # Try to get API key from environment or secrets
-    api_key = os.environ.get("HUGGINGFACE_API_KEY", "")
-    
     # Prepare the prompt
     prompt = f"""
     As a structural engineering expert, analyze these concrete defects detected in a warehouse:
@@ -55,74 +51,35 @@ def get_llm_commentary(defects_info):
     3. Recommended actions
     4. Safety implications
     
-    Keep the response concise and professional (under 200 words).
+    Keep the response concise and professional.
     """
     
-    # Use a freely accessible model - Google's Flan-T5
-    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
-    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    # Hugging Face API endpoint (using a free model like Mistral)
+    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+    headers = {"Authorization": f"Bearer {st.secrets.get('HUGGINGFACE_API_KEY', '')}"}
     
     payload = {
         "inputs": prompt,
         "parameters": {
-            "max_new_tokens": 300,
+            "max_new_tokens": 500,
             "temperature": 0.3,
-            "do_sample": True
+            "return_full_text": False
         }
     }
     
     try:
-        with st.spinner("Getting expert analysis from AI..."):
-            response = requests.post(API_URL, headers=headers, json=payload, timeout=45)
-            
-            if response.status_code == 503:
-                # Model is loading, wait and try again
-                st.info("AI model is loading, please wait a moment...")
-                import time
-                time.sleep(10)
-                response = requests.post(API_URL, headers=headers, json=payload, timeout=45)
-            
-            response.raise_for_status()
-            result = response.json()
-            
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get('generated_text', 'No analysis generated')
-            elif isinstance(result, dict):
-                return result.get('generated_text', 'No analysis generated')
-            else:
-                return "Received unexpected response format from AI service."
-                
-    except requests.exceptions.Timeout:
-        return "The AI analysis is taking too long. Please try again later."
-    except requests.exceptions.HTTPError as err:
-        if response.status_code == 401:
-            return "Authentication error: Please check your Hugging Face API key or use without one for limited access."
-        elif response.status_code == 404:
-            # Try an alternative model if the first one fails
-            try:
-                alt_api_url = "https://api-inference.huggingface.co/models/google/flan-t5-base"
-                response = requests.post(alt_api_url, headers=headers, json=payload, timeout=45)
-                response.raise_for_status()
-                result = response.json()
-                if isinstance(result, list) and len(result) > 0:
-                    return result[0].get('generated_text', 'No analysis generated')
-            except:
-                return "AI service is temporarily unavailable. Please try again later."
-        else:
-            return f"API Error: {err}"
+        response = requests.post(API_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        result = response.json()
+        return result[0]['generated_text']
     except Exception as e:
-        return f"Unable to generate AI commentary: {str(e)}"
+        return f"Unable to generate AI commentary at this time. Error: {str(e)}"
 
 # ----------------------------
 # 3. Streamlit UI
 # ----------------------------
-st.title("🏗️ Warehouse Concrete Defect Detection")
+st.title("Warehouse Concrete Defect Detection")
 st.write("Upload an image of concrete surfaces to detect defects and receive expert analysis.")
-
-# Check if we have an API key
-api_key = os.environ.get("HUGGINGFACE_API_KEY", "")
-if not api_key:
-    st.info("ℹ️ Using limited AI access. For better performance, add a Hugging Face API key as an environment variable.")
 
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
@@ -154,38 +111,24 @@ if uploaded_file is not None:
     
     # Display defect information
     if defects:
-        st.subheader("📊 Detection Results")
+        st.subheader("Detection Results")
+        
+        # Prepare defect information for LLM
+        defects_info = "\n".join([
+            f"- {d['type']} (confidence: {d['confidence']:.2f}) at position {d['location'][0]:.1f}, {d['location'][1]:.1f}"
+            for d in defects
+        ])
         
         # Show defects in a table
         for i, defect in enumerate(defects, 1):
             st.write(f"{i}. **{defect['type']}** ({(defect['confidence']*100):.1f}% confidence)")
         
-        # Prepare defect information for LLM
-        defects_info = "\n".join([
-            f"- {d['type']} (confidence: {d['confidence']:.2f})"
-            for d in defects
-        ])
-        
         # Get and display LLM commentary
-        commentary = get_llm_commentary(defects_info)
+        with st.spinner("Generating expert analysis..."):
+            commentary = get_llm_commentary(defects_info)
         
-        st.subheader("🧠 Expert Analysis")
+        st.subheader("Expert Analysis")
         st.write(commentary)
         
-        # Add some general advice based on common defects
-        if any('crack' in d['type'].lower() for d in defects):
-            st.info("💡 **General advice for cracks**: Monitor crack width over time. Cracks wider than 0.3mm may require professional assessment.")
-        if any('spall' in d['type'].lower() for d in defects):
-            st.info("💡 **General advice for spalling**: Exposed rebar can lead to corrosion. Consider protective coatings or repairs.")
-        
     else:
-        st.success("✅ No defects detected! The concrete surface appears to be in good condition.")
-
-# Add footer with information
-st.markdown("---")
-st.markdown("""
-**Note**: 
-- AI commentary is provided through Hugging Face's free inference API
-- For more reliable performance, add a Hugging Face API key as an environment variable
-- Detection accuracy depends on image quality and lighting conditions
-""")
+        st.success("No defects detected! The concrete surface appears to be in good condition.")
