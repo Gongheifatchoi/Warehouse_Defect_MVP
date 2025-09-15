@@ -42,7 +42,7 @@ def get_llm_commentary(defects_info):
     Get AI commentary on detected defects using a public Hugging Face model
     """
     # Using a public model that doesn't require API key
-    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
     
     # Prepare the prompt
     prompt = f"""
@@ -61,10 +61,9 @@ def get_llm_commentary(defects_info):
     payload = {
         "inputs": prompt,
         "parameters": {
-            "max_new_tokens": 400,
+            "max_new_tokens": 300,
             "temperature": 0.3,
-            "do_sample": True,
-            "return_full_text": False
+            "do_sample": True
         }
     }
     
@@ -95,7 +94,7 @@ def get_llm_commentary(defects_info):
         if response.status_code == 503:
             # Try an alternative model if the first one fails
             try:
-                alt_api_url = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
+                alt_api_url = "https://api-inference.huggingface.co/models/google/flan-t5-base"
                 response = requests.post(alt_api_url, json=payload, timeout=60)
                 response.raise_for_status()
                 result = response.json()
@@ -104,7 +103,7 @@ def get_llm_commentary(defects_info):
             except:
                 return "AI service is temporarily unavailable. Please try again later."
         else:
-            return f"API Error: {err}"
+            return f"Unable to connect to AI service. Please try again later."
     except Exception as e:
         return f"Unable to generate AI commentary: {str(e)}"
 
