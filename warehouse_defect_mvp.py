@@ -56,9 +56,12 @@ def get_llm_commentary(defects_info):
         st.error(f"Error accessing secrets: {e}")
         return "Secrets access error."
     
-    # Using a model that works well with the inference API
-    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
-    headers = {"Authorization": f"Bearer {api_key}"}
+    # Using models that are definitely available on Hugging Face inference API
+    models_to_try = [
+        "https://api-inference.huggingface.co/models/google/flan-t5-xxl",
+        "https://api-inference.huggingface.co/models/google/flan-t5-large",
+        "https://api-inference.huggingface.co/models/google/flan-t5-base"
+    ]
     
     # Prepare the prompt
     prompt = f"""
@@ -74,47 +77,43 @@ def get_llm_commentary(defects_info):
     Keep the response concise and professional (under 200 words).
     """
     
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": 400,
-            "temperature": 0.3,
-            "do_sample": True,
-            "return_full_text": False
-        }
-    }
-    
-    try:
-        with st.spinner("Getting expert analysis from AI..."):
-            response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+    for api_url in models_to_try:
+        try:
+            headers = {"Authorization": f"Bearer {api_key}"}
+            payload = {
+                "inputs": prompt,
+                "parameters": {
+                    "max_new_tokens": 300,
+                    "temperature": 0.3,
+                    "do_sample": True
+                }
+            }
             
-            if response.status_code == 503:
-                # Model is loading, wait and try again
-                st.info("AI model is loading, please wait a moment...")
-                time.sleep(20)
-                response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-            
-            response.raise_for_status()
-            result = response.json()
-            
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get('generated_text', 'No analysis generated')
-            elif isinstance(result, dict):
-                return result.get('generated_text', 'No analysis generated')
-            else:
-                return "Received unexpected response format from AI service."
+            with st.spinner(f"Getting expert analysis from AI using {api_url.split('/')[-1]}..."):
+                response = requests.post(api_url, headers=headers, json=payload, timeout=45)
                 
-    except requests.exceptions.Timeout:
-        return "The AI analysis is taking too long. Please try again later."
-    except requests.exceptions.HTTPError as err:
-        if response.status_code == 401:
-            return "Authentication error: Please check your Hugging Face API key."
-        elif response.status_code == 503:
-            return "Model is currently loading. Please try again in a few moments."
-        else:
-            return f"API Error: {err}"
-    except Exception as e:
-        return f"Unable to generate AI commentary: {str(e)}"
+                if response.status_code == 503:
+                    # Model is loading, wait and try again
+                    st.info("AI model is loading, please wait a moment...")
+                    time.sleep(15)
+                    response = requests.post(api_url, headers=headers, json=payload, timeout=45)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    if isinstance(result, list) and len(result) > 0:
+                        return result[0].get('generated_text', 'No analysis generated')
+                    elif isinstance(result, dict):
+                        return result.get('generated_text', 'No analysis generated')
+                    else:
+                        continue  # Try next model
+                else:
+                    continue  # Try next model
+                    
+        except Exception as e:
+            continue  # Try next model
+    
+    return "AI service is temporarily unavailable. Please try again later."
 
 # ----------------------------
 # 3. Streamlit UI
