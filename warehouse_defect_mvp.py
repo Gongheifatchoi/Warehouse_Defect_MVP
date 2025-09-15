@@ -82,33 +82,40 @@ def get_llm_commentary(defects):
         
         # Professional engineering prompt with specific technical requirements
         prompt = f"""
-        As a licensed structural engineer with expertise in concrete pathology and warehouse structural assessment, 
-        provide a detailed technical analysis of these detected concrete defects:
+        As a licensed structural engineer with expertise in concrete pathology, provide a detailed technical analysis of these concrete defects:
         
         {defects_info}
         
         For EACH specific defect type identified above, provide a comprehensive engineering assessment including:
         
-        1. DEFECT-SPECIFIC ANALYSIS:
-           - For each defect type: structural significance, severity rating, and specific implications
-           - Detailed description of what each defect type represents in engineering terms
+        1. DEFECT IDENTIFICATION AND DESCRIPTION:
+           - Precisely define what this defect type is (e.g., "Hairline cracks are micro-fissures typically < 0.1mm wide...")
+           - Detailed physical description of the defect appearance
+           - Typical locations where this defect occurs in concrete structures
         
-        2. ROOT CAUSE ANALYSIS BY DEFECT TYPE:
-           - Specific causes for each type of defect (cracks, spalling, corrosion, etc.)
-           - Material, construction, environmental, and loading factors for each defect type
+        2. ENGINEERING SIGNIFICANCE:
+           - Structural implications and severity rating (Minor, Moderate, Severe, Critical)
+           - Specific risks associated with this defect type
+           - Potential for progression and long-term consequences
         
-        3. QUANTITATIVE ASSESSMENT:
-           - Severity classification for each defect type (Minor, Moderate, Severe, Critical)
-           - Risk assessment for each defect type
-           - Potential impact on structural capacity for each defect category
+        3. ROOT CAUSE ANALYSIS:
+           - Specific causes for this particular defect type
+           - Material factors, construction practices, environmental conditions, or loading issues
+           - Timeline of development (immediate vs. long-term manifestation)
         
-        4. DEFECT-SPECIFIC MITIGATION:
-           - Recommended repair methods for each specific defect type
-           - Urgency of intervention for each defect category
-           - Specific repair techniques appropriate for each defect type
+        4. QUANTITATIVE ASSESSMENT:
+           - Typical dimensions and characteristics of this defect type
+           - Measurement criteria and acceptance limits per relevant standards
+           - Monitoring requirements and frequency
         
-        Please structure your response by DEFECT TYPE, providing specific analysis for each category of defect detected.
-        Use technical engineering terminology and reference appropriate standards.
+        5. DEFECT-SPECIFIC MITIGATION:
+           - Recommended repair methods specifically for this defect type
+           - Urgency of intervention and safety precautions
+           - Preventive measures to avoid recurrence
+        
+        Please structure your response by DEFECT TYPE with clear headings for each defect category.
+        For each defect type, start with: "**DEFECT TYPE: [defect name]**" followed by detailed analysis.
+        Use precise engineering terminology and reference appropriate standards (ACI, EN, ASTM).
         """
         
         with st.spinner("Conducting defect-specific structural analysis..."):
@@ -117,14 +124,14 @@ def get_llm_commentary(defects):
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a senior structural engineering consultant specializing in concrete defect analysis. You provide detailed, defect-specific assessments that explicitly address each type of defect found. Your analysis is organized by defect type and includes specific engineering recommendations for each category."
+                        "content": "You are a senior structural engineering consultant specializing in concrete defect analysis. You provide extremely detailed, defect-specific assessments that explicitly define, describe, and analyze each type of defect found. Your analysis is organized by defect type with clear headings and includes specific engineering definitions, descriptions, and recommendations for each defect category."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                max_tokens=800,
+                max_tokens=1000,
                 temperature=0.2,
                 top_p=0.8,
                 stream=False
@@ -139,7 +146,7 @@ def get_llm_commentary(defects):
 # 3. Streamlit UI
 # ----------------------------
 st.title("🏗️ Warehouse Concrete Structural Assessment")
-st.write("Upload an image of concrete surfaces for professional structural defect analysis and engineering recommendations.")
+st.write("Upload an image of concrete surfaces for detailed defect analysis and specific engineering recommendations.")
 
 # Check if we have the API key set up
 try:
@@ -147,7 +154,7 @@ try:
     if not has_api_key:
         st.warning("Hugging Face API token not found in secrets. Professional engineering analysis may not be available.")
     else:
-        st.success("Hugging Face API key authenticated. Ready for professional structural analysis.")
+        st.success("Hugging Face API key authenticated. Ready for detailed defect analysis.")
 except:
     st.warning("Unable to verify API configuration. Some features may be limited.")
 
@@ -159,12 +166,12 @@ if uploaded_file is not None:
     st.image(image, caption="Structural Inspection Image", use_container_width=True)
 
     # Run detection
-    with st.spinner("Conducting structural defect analysis..."):
+    with st.spinner("Analyzing concrete defects..."):
         results = model(image)
     
     # Annotated image
     annotated_image = results[0].plot()
-    st.image(annotated_image, caption="Identified Structural Defects", use_container_width=True)
+    st.image(annotated_image, caption="Identified Concrete Defects", use_container_width=True)
     
     # Extract defect information
     defects = []
@@ -181,7 +188,7 @@ if uploaded_file is not None:
     
     # Display defect information
     if defects:
-        st.subheader("📊 Structural Defect Inventory")
+        st.subheader("📊 Concrete Defect Inventory")
         
         # Group defects by type for better presentation
         defect_counts = {}
@@ -199,40 +206,60 @@ if uploaded_file is not None:
             st.write(f"{i}. **{defect['type']}** - Detection confidence: {defect['confidence']*100:.1f}%")
         
         # Get and display professional engineering analysis
-        st.subheader("🧠 Defect-Specific Engineering Assessment")
-        with st.spinner("Generating comprehensive defect-type analysis..."):
+        st.subheader("🧠 Detailed Defect Analysis")
+        st.info("**Analysis includes:** Defect definition, engineering significance, root causes, quantitative assessment, and specific mitigation strategies for each defect type.")
+        
+        with st.spinner("Generating comprehensive defect-specific analysis..."):
             analysis = get_llm_commentary(defects)
         
         st.write(analysis)
         
-        # Add technical references with defect-specific information
-        with st.expander("📚 Technical References & Defect Classification"):
+        # Add technical references with detailed defect definitions
+        with st.expander("📚 Concrete Defect Definitions & Standards"):
             st.write("""
-            **Common Concrete Defect Types:**
+            **Detailed Defect Classification:**
             
-            **Cracks:**
-            - **Hairline cracks**: < 0.1mm width, typically cosmetic
-            - **Fine cracks**: 0.1-0.3mm, may indicate early stage issues
-            - **Medium cracks**: 0.3-1.0mm, require monitoring and possible repair
-            - **Wide cracks**: > 1.0mm, structural concern requiring intervention
+            **HAIRLINE CRACKS:**
+            - **Definition**: Very fine cracks typically < 0.1mm wide
+            - **Appearance**: Barely visible, often called "craze cracking"
+            - **Causes**: Plastic shrinkage, early thermal contraction
+            - **Standards**: ACI 224R, ASTM C856
             
-            **Spalling:**
-            - **Surface spalling**: Cosmetic, limited depth
-            - **Moderate spalling**: Exposed aggregate, some reinforcement visible
-            - **Severe spalling**: Significant concrete loss, reinforcement exposed
-            - **Delamination**: Subsurface separation, detectable by sounding
+            **FINE CRACKS:**
+            - **Definition**: Cracks 0.1-0.3mm wide
+            - **Appearance**: Visible but narrow fissures
+            - **Causes**: Drying shrinkage, thermal movement
+            - **Standards**: ACI 224R, EN 1992-1-1
             
-            **Corrosion:**
-            - **Surface staining**: Early warning signs
-            - **Active corrosion**: Rust formation and expansion
-            - **Section loss**: Reduction in reinforcement cross-section
-            - **Advanced deterioration**: Significant structural compromise
+            **MEDIUM CRACKS:**
+            - **Definition**: Cracks 0.3-1.0mm wide
+            - **Appearance**: Clearly visible, may allow minor moisture penetration
+            - **Causes**: Structural loading, settlement, restraint conditions
+            - **Standards**: ACI 318, BS 8110
             
-            **Relevant Standards:**
-            - ACI 201.1R: Guide for Concrete Inspection
-            - ACI 224R: Crack Control in Concrete Structures
-            - ACI 364.1R: Evaluation Prior to Rehabilitation
-            - EN 1504: Concrete Protection and Repair
+            **SPALLING:**
+            - **Definition**: Localized concrete breakdown and disintegration
+            - **Appearance**: Crumbling, popping, or breaking away of surface
+            - **Causes**: Corrosion expansion, freeze-thaw, impact damage
+            - **Standards**: ACI 201.1R, EN 1504
+            
+            **CORROSION STAINS:**
+            - **Definition**: Rust discoloration indicating reinforcement corrosion
+            - **Appearance**: Brownish-red stains, often following crack patterns
+            - **Causes**: Chloride ingress, carbonation, inadequate cover
+            - **Standards**: ASTM C876, ACI 222R
+            
+            **EFFLORESCENCE:**
+            - **Definition**: White salt deposits on concrete surface
+            - **Appearance**: Powdery white residue, often crystalline
+            - **Causes**: Moisture migration dissolving and depositing salts
+            - **Standards**: ASTM C67, ACI 201.1R
+            
+            **SCALING:**
+            - **Definition**: Surface deterioration exposing aggregate
+            - **Appearance**: Rough texture, aggregate visibility
+            - **Causes**: Freeze-thaw cycles, deicer chemicals
+            - **Standards**: ASTM C672, ACI 201.1R
             """)
         
     else:
