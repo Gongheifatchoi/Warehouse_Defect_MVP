@@ -42,11 +42,12 @@ uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png
 if uploaded_file is not None:
     # Open the image
     image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
+    st.image(image, caption="Uploaded Image", use_container_width=True)
 
     # Run detection
     results = model(image)
 
     # Annotated image
     annotated_image = results[0].plot()
-    st.image(annotated_image, caption="Detected Defects", use_column_width=True)
+    st.image(annotated_image, caption="Detected Defects", use_container_width=True)
+
