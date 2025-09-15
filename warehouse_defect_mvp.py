@@ -35,15 +35,14 @@ def load_yolo_model(model_path):
 model = load_yolo_model(model_file)
 
 # ----------------------------
-# 2. Hugging Face LLM Integration
+# 2. Hugging Face LLM Integration (Updated)
 # ----------------------------
 def get_llm_commentary(defects_info):
     """
-    Get AI commentary on detected defects using Hugging Face's free inference API
-    Using a freely accessible model that doesn't require special permissions
+    Get AI commentary on detected defects using a public Hugging Face model
     """
-    # Try to get API key from environment or secrets
-    api_key = os.environ.get("HUGGINGFACE_API_KEY", "")
+    # Using a public model that doesn't require API key
+    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
     
     # Prepare the prompt
     prompt = f"""
@@ -59,29 +58,26 @@ def get_llm_commentary(defects_info):
     Keep the response concise and professional (under 200 words).
     """
     
-    # Use a freely accessible model - Google's Flan-T5
-    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
-    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-    
     payload = {
         "inputs": prompt,
         "parameters": {
-            "max_new_tokens": 300,
+            "max_new_tokens": 400,
             "temperature": 0.3,
-            "do_sample": True
+            "do_sample": True,
+            "return_full_text": False
         }
     }
     
     try:
         with st.spinner("Getting expert analysis from AI..."):
-            response = requests.post(API_URL, headers=headers, json=payload, timeout=45)
+            response = requests.post(API_URL, json=payload, timeout=60)
             
             if response.status_code == 503:
                 # Model is loading, wait and try again
                 st.info("AI model is loading, please wait a moment...")
                 import time
-                time.sleep(10)
-                response = requests.post(API_URL, headers=headers, json=payload, timeout=45)
+                time.sleep(15)
+                response = requests.post(API_URL, json=payload, timeout=60)
             
             response.raise_for_status()
             result = response.json()
@@ -96,13 +92,11 @@ def get_llm_commentary(defects_info):
     except requests.exceptions.Timeout:
         return "The AI analysis is taking too long. Please try again later."
     except requests.exceptions.HTTPError as err:
-        if response.status_code == 401:
-            return "Authentication error: Please check your Hugging Face API key or use without one for limited access."
-        elif response.status_code == 404:
+        if response.status_code == 503:
             # Try an alternative model if the first one fails
             try:
-                alt_api_url = "https://api-inference.huggingface.co/models/google/flan-t5-base"
-                response = requests.post(alt_api_url, headers=headers, json=payload, timeout=45)
+                alt_api_url = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
+                response = requests.post(alt_api_url, json=payload, timeout=60)
                 response.raise_for_status()
                 result = response.json()
                 if isinstance(result, list) and len(result) > 0:
@@ -119,11 +113,6 @@ def get_llm_commentary(defects_info):
 # ----------------------------
 st.title("🏗️ Warehouse Concrete Defect Detection")
 st.write("Upload an image of concrete surfaces to detect defects and receive expert analysis.")
-
-# Check if we have an API key
-api_key = os.environ.get("HUGGINGFACE_API_KEY", "")
-if not api_key:
-    st.info("ℹ️ Using limited AI access. For better performance, add a Hugging Face API key as an environment variable.")
 
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
@@ -186,7 +175,6 @@ if uploaded_file is not None:
 st.markdown("---")
 st.markdown("""
 **Note**: 
-- AI commentary is provided through Hugging Face's free inference API
-- For more reliable performance, add a Hugging Face API key as an environment variable
+- AI commentary is provided through Hugging Face's public inference API
 - Detection accuracy depends on image quality and lighting conditions
 """)
