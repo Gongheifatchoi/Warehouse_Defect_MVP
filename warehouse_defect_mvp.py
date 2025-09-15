@@ -10,7 +10,8 @@ import json
 # 1. Model setup
 # ----------------------------
 MODEL_PATH = "best.pt"
-MODEL_URL = "https://drive.google.com/uc?export=download&id=1fOeD5p2bdG-VkgNq7-QNJmlXp5_DaPm1"
+MODEL_URL = "https://drive.google.com/uc?export=download&id=1FHjz3wjLBWk5c04j7kGBynQcPTyVA19R"
+
 
 @st.cache_data(show_spinner=False)
 def download_model(url=MODEL_URL, path=MODEL_PATH):
