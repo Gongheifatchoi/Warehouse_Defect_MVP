@@ -6,6 +6,7 @@ import gdown
 import requests
 import json
 import time
+from openai import OpenAI
 
 # ----------------------------
 # 1. Model setup
@@ -36,11 +37,11 @@ def load_yolo_model(model_path):
 model = load_yolo_model(model_file)
 
 # ----------------------------
-# 2. Hugging Face LLM Integration with Llama 3
+# 2. Hugging Face LLM Integration with OpenAI-compatible API
 # ----------------------------
 def get_llm_commentary(defects_info):
     """
-    Get AI commentary on detected defects using Llama 3 via Hugging Face API
+    Get AI commentary on detected defects using Hugging Face's OpenAI-compatible API
     """
     # Get API key from Streamlit secrets
     try:
@@ -49,6 +50,8 @@ def get_llm_commentary(defects_info):
             api_key = st.secrets['HUGGINGFACEHUB_API_TOKEN']
         elif 'HUGGINGFACE_API_KEY' in st.secrets:
             api_key = st.secrets['HUGGINGFACE_API_KEY']
+        elif 'HF_TOKEN' in st.secrets:
+            api_key = st.secrets['HF_TOKEN']
         else:
             st.error("Hugging Face API token not found in secrets. Please check your secrets configuration.")
             return "API token configuration error."
@@ -56,92 +59,50 @@ def get_llm_commentary(defects_info):
         st.error(f"Error accessing secrets: {e}")
         return "Secrets access error."
     
-    # Using Meta's Llama 3 7B model - this is available on Hugging Face Inference API
-    API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
-    headers = {"Authorization": f"Bearer {api_key}"}
-    
-    # Prepare the prompt in chat format for Llama 3
-    prompt = f"""
-    You are a structural engineering expert analyzing concrete defects in warehouses.
-    
-    Analyze these detected defects:
-    {defects_info}
-    
-    Please provide:
-    1. A brief assessment of the severity
-    2. Potential causes
-    3. Recommended actions
-    4. Safety implications
-    
-    Keep the response concise and professional (under 200 words).
-    """
-    
-    # Format for chat models
-    messages = [
-        {"role": "system", "content": "You are a structural engineering expert with 20+ years of experience in analyzing concrete structures and defects."},
-        {"role": "user", "content": prompt}
-    ]
-    
-    payload = {
-        "inputs": messages,
-        "parameters": {
-            "max_new_tokens": 400,
-            "temperature": 0.3,
-            "top_p": 0.9,
-            "do_sample": True,
-            "return_full_text": False
-        }
-    }
-    
     try:
+        # Initialize OpenAI client with Hugging Face endpoint
+        client = OpenAI(
+            base_url="https://router.huggingface.co/v1",
+            api_key=api_key,
+        )
+        
+        # Prepare the prompt
+        prompt = f"""
+        As a structural engineering expert with 20+ years of experience, analyze these concrete defects detected in a warehouse:
+        
+        {defects_info}
+        
+        Please provide a comprehensive analysis including:
+        1. Assessment of severity for each defect type
+        2. Potential causes based on the defect characteristics
+        3. Recommended immediate and long-term actions
+        4. Safety implications and risks
+        5. Maintenance recommendations
+        
+        Keep the response professional, concise, and focused on practical advice (under 250 words).
+        """
+        
         with st.spinner("Getting expert analysis from Llama 3 AI..."):
-            response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+            response = client.chat.completions.create(
+                model="meta-llama/Meta-Llama-3-8B-Instruct",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a senior structural engineering expert specializing in concrete structures and defect analysis. Provide professional, accurate, and practical advice."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                max_tokens=400,
+                temperature=0.3,
+                top_p=0.9,
+                stream=False
+            )
             
-            # Check if model is loading
-            if response.status_code == 503:
-                try:
-                    error_info = response.json()
-                    if 'estimated_time' in error_info:
-                        wait_time = error_info['estimated_time']
-                        st.info(f"Llama 3 model is loading. Estimated wait time: {wait_time:.1f} seconds")
-                        time.sleep(wait_time + 5)
-                        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-                    else:
-                        st.info("Llama 3 model is loading, please wait...")
-                        time.sleep(25)
-                        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-                except:
-                    st.info("Model is loading, please wait...")
-                    time.sleep(25)
-                    response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-            
-            response.raise_for_status()
-            result = response.json()
-            
-            # Parse the response from Llama 3
-            if isinstance(result, list) and len(result) > 0:
-                if 'generated_text' in result[0]:
-                    return result[0]['generated_text']
-                elif isinstance(result[0], dict) and 'generated_text' in result[0]:
-                    return result[0]['generated_text']
-            
-            # Try alternative response format
-            if isinstance(result, dict) and 'generated_text' in result:
-                return result['generated_text']
+            return response.choices[0].message.content
                 
-            return "Received unexpected response format from AI service."
-                
-    except requests.exceptions.Timeout:
-        return "The AI analysis is taking too long. Please try again later."
-    except requests.exceptions.HTTPError as err:
-        if response.status_code == 401:
-            return "Authentication error: Please check your Hugging Face API key."
-        elif response.status_code == 404:
-            return "Llama 3 model not found. It may not be available on the inference API."
-        elif response.status_code == 503:
-            return "Llama 3 model is currently loading. Please try again in a few minutes."
-        else:
-            return f"API Error: {str(err)}"
     except Exception as e:
         return f"Unable to generate AI commentary: {str(e)}"
 
@@ -153,9 +114,9 @@ st.write("Upload an image of concrete surfaces to detect defects and receive exp
 
 # Check if we have the API key set up
 try:
-    has_api_key = 'HUGGINGFACEHUB_API_TOKEN' in st.secrets or 'HUGGINGFACE_API_KEY' in st.secrets
+    has_api_key = any(key in st.secrets for key in ['HUGGINGFACEHUB_API_TOKEN', 'HUGGINGFACE_API_KEY', 'HF_TOKEN'])
     if not has_api_key:
-        st.warning("Hugging Face API key not found in secrets. AI analysis may not work.")
+        st.warning("Hugging Face API token not found in secrets. AI analysis may not work.")
     else:
         st.success("Hugging Face API key found! Using Llama 3 for expert analysis.")
 except:
@@ -222,7 +183,7 @@ if uploaded_file is not None:
 st.markdown("---")
 st.markdown("""
 **Note**: 
-- AI commentary is provided by Meta's Llama 3 model through Hugging Face's inference API
+- AI commentary is provided by Meta's Llama 3 8B model through Hugging Face's OpenAI-compatible API
 - Detection accuracy depends on image quality and lighting conditions
-- The Llama 3 model may take a few moments to load on first use
+- Make sure your Hugging Face token has access to the Llama 3 model
 """)
