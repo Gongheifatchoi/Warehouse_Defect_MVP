@@ -41,7 +41,7 @@ model = load_yolo_model(model_file)
 # ----------------------------
 def get_llm_commentary(defects_info):
     """
-    Get AI commentary on detected defects using Hugging Face's OpenAI-compatible API
+    Get professional engineering analysis using Hugging Face's OpenAI-compatible API
     """
     # Get API key from Streamlit secrets
     try:
@@ -66,76 +66,103 @@ def get_llm_commentary(defects_info):
             api_key=api_key,
         )
         
-        # Prepare the prompt
+        # Professional engineering prompt with specific technical requirements
         prompt = f"""
-        As a structural engineering expert with 20+ years of experience, analyze these concrete defects detected in a warehouse:
+        As a licensed structural engineer with expertise in concrete pathology and warehouse structural assessment, 
+        provide a detailed technical analysis of these detected concrete defects:
         
+        DEFECTS IDENTIFIED:
         {defects_info}
         
-        Please provide a comprehensive analysis including:
-        1. Assessment of severity for each defect type
-        2. Potential causes based on the defect characteristics
-        3. Recommended immediate and long-term actions
-        4. Safety implications and risks
-        5. Maintenance recommendations
+        Please provide a comprehensive engineering assessment including:
         
-        Keep the response professional, concise, and focused on practical advice (under 250 words).
+        1. STRUCTURAL SIGNIFICANCE:
+           - Rate severity for each defect type (Minor, Moderate, Severe, Critical)
+           - Potential impact on structural integrity and load-bearing capacity
+           - Risk of progressive deterioration
+        
+        2. ROOT CAUSE ANALYSIS:
+           - Material deficiencies (concrete mix design, aggregate issues)
+           - Construction practices (improper curing, compaction issues)
+           - Environmental factors (freeze-thaw cycles, chemical exposure)
+           - Loading conditions (overloading, dynamic impacts)
+           - Corrosion mechanisms (chloride ingress, carbonation)
+        
+        3. QUANTITATIVE ASSESSMENT:
+           - Estimated remaining service life reduction
+           - Crack width classification per ACI 224R or relevant standards
+           - Spalling depth and area significance
+           - Reinforcement corrosion activity level
+        
+        4. MITIGATION STRATEGIES:
+           - Immediate safety precautions required
+           - Short-term stabilization measures
+           - Long-term repair methodologies (epoxy injection, cathodic protection, etc.)
+           - Monitoring and inspection frequency recommendations
+        
+        5. COST AND TIMELINE IMPLICATIONS:
+           - Urgency of intervention
+           - Estimated repair complexity
+           - Potential business interruption impacts
+        
+        Provide specific, actionable recommendations based on engineering best practices and relevant codes (ACI, EN, AS).
+        Use technical terminology appropriate for structural engineering professionals.
         """
         
-        with st.spinner("Getting expert analysis from Llama 3 AI..."):
+        with st.spinner("Conducting professional structural analysis..."):
             response = client.chat.completions.create(
                 model="meta-llama/Meta-Llama-3-8B-Instruct",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a senior structural engineering expert specializing in concrete structures and defect analysis. Provide professional, accurate, and practical advice."
+                        "content": "You are a senior structural engineering consultant with 25+ years of experience in concrete pathology, structural assessment, and repair design. You provide precise, technical analysis following engineering standards and codes. Your responses are professional, data-driven, and focused on actionable engineering recommendations."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                max_tokens=400,
-                temperature=0.3,
-                top_p=0.9,
+                max_tokens=600,
+                temperature=0.2,  # Lower temperature for more deterministic, professional output
+                top_p=0.8,
                 stream=False
             )
             
             return response.choices[0].message.content
                 
     except Exception as e:
-        return f"Unable to generate AI commentary: {str(e)}"
+        return f"Unable to generate engineering analysis: {str(e)}"
 
 # ----------------------------
 # 3. Streamlit UI
 # ----------------------------
-st.title("🏗️ Warehouse Concrete Defect Detection")
-st.write("Upload an image of concrete surfaces to detect defects and receive expert analysis using Llama 3 AI.")
+st.title("🏗️ Warehouse Concrete Structural Assessment")
+st.write("Upload an image of concrete surfaces for professional structural defect analysis and engineering recommendations.")
 
 # Check if we have the API key set up
 try:
     has_api_key = any(key in st.secrets for key in ['HUGGINGFACEHUB_API_TOKEN', 'HUGGINGFACE_API_KEY', 'HF_TOKEN'])
     if not has_api_key:
-        st.warning("Hugging Face API token not found in secrets. AI analysis may not work.")
+        st.warning("Hugging Face API token not found in secrets. Professional engineering analysis may not be available.")
     else:
-        st.success("Hugging Face API key found! Using Llama 3 for expert analysis.")
+        st.success("Hugging Face API key authenticated. Ready for professional structural analysis.")
 except:
-    st.warning("Unable to check secrets configuration. AI analysis may not work.")
+    st.warning("Unable to verify API configuration. Some features may be limited.")
 
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("Choose structural inspection image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
     # Open the image
     image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_container_width=True)
+    st.image(image, caption="Structural Inspection Image", use_container_width=True)
 
     # Run detection
-    with st.spinner("Analyzing image for defects..."):
+    with st.spinner("Conducting structural defect analysis..."):
         results = model(image)
     
     # Annotated image
     annotated_image = results[0].plot()
-    st.image(annotated_image, caption="Detected Defects", use_container_width=True)
+    st.image(annotated_image, caption="Identified Structural Defects", use_container_width=True)
     
     # Extract defect information
     defects = []
@@ -152,38 +179,65 @@ if uploaded_file is not None:
     
     # Display defect information
     if defects:
-        st.subheader("📊 Detection Results")
+        st.subheader("📊 Structural Defect Inventory")
         
-        # Show defects in a table
+        # Professional defect table
+        st.write("**Defect Classification Summary:**")
+        defect_data = []
         for i, defect in enumerate(defects, 1):
-            st.write(f"{i}. **{defect['type']}** ({(defect['confidence']*100):.1f}% confidence)")
+            defect_data.append({
+                "Defect #": i,
+                "Type": defect['type'],
+                "Confidence": f"{defect['confidence']*100:.1f}%",
+                "Severity": "To be assessed"  # Placeholder for engineering assessment
+            })
         
-        # Prepare defect information for LLM
+        # Show defects in a professional table format
+        for defect in defect_data:
+            st.write(f"**{defect['Defect #']}. {defect['Type']}** - Confidence: {defect['Confidence']}")
+        
+        # Prepare defect information for engineering analysis
         defects_info = "\n".join([
-            f"- {d['type']} (confidence: {d['confidence']:.2f})"
+            f"- {d['type']} (detection confidence: {d['confidence']:.2f})"
             for d in defects
         ])
         
-        # Get and display LLM commentary
-        commentary = get_llm_commentary(defects_info)
+        # Get and display professional engineering analysis
+        st.subheader("🧠 Professional Engineering Assessment")
+        with st.spinner("Generating comprehensive structural analysis..."):
+            analysis = get_llm_commentary(defects_info)
         
-        st.subheader("🧠 Expert Analysis (Powered by Llama 3)")
-        st.write(commentary)
+        st.write(analysis)
         
-        # Add some general advice based on common defects
-        if any('crack' in d['type'].lower() for d in defects):
-            st.info("💡 **General advice for cracks**: Monitor crack width over time. Cracks wider than 0.3mm may require professional assessment.")
-        if any('spall' in d['type'].lower() for d in defects):
-            st.info("💡 **General advice for spalling**: Exposed rebar can lead to corrosion. Consider protective coatings or repairs.")
+        # Add technical references
+        with st.expander("📚 Technical References & Standards"):
+            st.write("""
+            **Relevant Engineering Standards:**
+            - ACI 201.1R: Guide for Conducting a Visual Inspection of Concrete in Service
+            - ACI 224R: Control of Cracking in Concrete Structures
+            - ACI 364.1R: Guide for Evaluation of Concrete Structures Prior to Rehabilitation
+            - EN 1504: Products and systems for the protection and repair of concrete structures
+            - ASTM C856: Standard Practice for Petrographic Examination of Hardened Concrete
+            
+            **Severity Classification:**
+            - **Minor**: Cosmetic issues, no structural impact
+            - **Moderate**: Requires monitoring, may need non-structural repairs
+            - **Severe**: Structural capacity affected, requires engineering intervention
+            - **Critical**: Immediate safety risk, requires urgent structural repairs
+            """)
         
     else:
-        st.success("✅ No defects detected! The concrete surface appears to be in good condition.")
+        st.success("✅ No structural defects detected! The concrete elements appear to be in sound condition.")
 
-# Add footer with information
+# Add professional footer
 st.markdown("---")
 st.markdown("""
-**Note**: 
-- AI commentary is provided by Meta's Llama 3 8B model through Hugging Face's OpenAI-compatible API
-- Detection accuracy depends on image quality and lighting conditions
-- Make sure your Hugging Face token has access to the Llama 3 model
+**Disclaimer**: 
+- This analysis provides preliminary engineering assessment based on visual inspection data
+- Field verification and detailed structural analysis by licensed engineers is recommended for final decisions
+- All recommendations should be verified against local building codes and specific site conditions
+- Detection accuracy is dependent on image quality, lighting, and surface conditions
 """)
+
+# Add engineering certification note
+st.caption("_Analysis generated using AI-assisted engineering assessment tools. Final engineering decisions should be made by qualified professionals._")
