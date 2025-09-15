@@ -39,7 +39,7 @@ model = load_yolo_model(model_file)
 # ----------------------------
 # 2. Hugging Face LLM Integration with OpenAI-compatible API
 # ----------------------------
-def get_llm_commentary(defects_info):
+def get_llm_commentary(defects):
     """
     Get professional engineering analysis using Hugging Face's OpenAI-compatible API
     """
@@ -66,64 +66,66 @@ def get_llm_commentary(defects_info):
             api_key=api_key,
         )
         
+        # Prepare detailed defect information with explicit types
+        defects_info = "DETECTED DEFECT TYPES AND QUANTITIES:\n"
+        defect_counts = {}
+        for defect in defects:
+            defect_type = defect['type']
+            defect_counts[defect_type] = defect_counts.get(defect_type, 0) + 1
+        
+        for defect_type, count in defect_counts.items():
+            defects_info += f"- {defect_type}: {count} instance(s)\n"
+        
+        defects_info += "\nINDIVIDUAL DEFECT DETAILS:\n"
+        for i, defect in enumerate(defects, 1):
+            defects_info += f"{i}. {defect['type']} (confidence: {defect['confidence']:.2f})\n"
+        
         # Professional engineering prompt with specific technical requirements
         prompt = f"""
         As a licensed structural engineer with expertise in concrete pathology and warehouse structural assessment, 
         provide a detailed technical analysis of these detected concrete defects:
         
-        DEFECTS IDENTIFIED:
         {defects_info}
         
-        Please provide a comprehensive engineering assessment including:
+        For EACH specific defect type identified above, provide a comprehensive engineering assessment including:
         
-        1. STRUCTURAL SIGNIFICANCE:
-           - Rate severity for each defect type (Minor, Moderate, Severe, Critical)
-           - Potential impact on structural integrity and load-bearing capacity
-           - Risk of progressive deterioration
+        1. DEFECT-SPECIFIC ANALYSIS:
+           - For each defect type: structural significance, severity rating, and specific implications
+           - Detailed description of what each defect type represents in engineering terms
         
-        2. ROOT CAUSE ANALYSIS:
-           - Material deficiencies (concrete mix design, aggregate issues)
-           - Construction practices (improper curing, compaction issues)
-           - Environmental factors (freeze-thaw cycles, chemical exposure)
-           - Loading conditions (overloading, dynamic impacts)
-           - Corrosion mechanisms (chloride ingress, carbonation)
+        2. ROOT CAUSE ANALYSIS BY DEFECT TYPE:
+           - Specific causes for each type of defect (cracks, spalling, corrosion, etc.)
+           - Material, construction, environmental, and loading factors for each defect type
         
         3. QUANTITATIVE ASSESSMENT:
-           - Estimated remaining service life reduction
-           - Crack width classification per ACI 224R or relevant standards
-           - Spalling depth and area significance
-           - Reinforcement corrosion activity level
+           - Severity classification for each defect type (Minor, Moderate, Severe, Critical)
+           - Risk assessment for each defect type
+           - Potential impact on structural capacity for each defect category
         
-        4. MITIGATION STRATEGIES:
-           - Immediate safety precautions required
-           - Short-term stabilization measures
-           - Long-term repair methodologies (epoxy injection, cathodic protection, etc.)
-           - Monitoring and inspection frequency recommendations
+        4. DEFECT-SPECIFIC MITIGATION:
+           - Recommended repair methods for each specific defect type
+           - Urgency of intervention for each defect category
+           - Specific repair techniques appropriate for each defect type
         
-        5. COST AND TIMELINE IMPLICATIONS:
-           - Urgency of intervention
-           - Estimated repair complexity
-           - Potential business interruption impacts
-        
-        Provide specific, actionable recommendations based on engineering best practices and relevant codes (ACI, EN, AS).
-        Use technical terminology appropriate for structural engineering professionals.
+        Please structure your response by DEFECT TYPE, providing specific analysis for each category of defect detected.
+        Use technical engineering terminology and reference appropriate standards.
         """
         
-        with st.spinner("Conducting professional structural analysis..."):
+        with st.spinner("Conducting defect-specific structural analysis..."):
             response = client.chat.completions.create(
                 model="meta-llama/Meta-Llama-3-8B-Instruct",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a senior structural engineering consultant with 25+ years of experience in concrete pathology, structural assessment, and repair design. You provide precise, technical analysis following engineering standards and codes. Your responses are professional, data-driven, and focused on actionable engineering recommendations."
+                        "content": "You are a senior structural engineering consultant specializing in concrete defect analysis. You provide detailed, defect-specific assessments that explicitly address each type of defect found. Your analysis is organized by defect type and includes specific engineering recommendations for each category."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                max_tokens=600,
-                temperature=0.2,  # Lower temperature for more deterministic, professional output
+                max_tokens=800,
+                temperature=0.2,
                 top_p=0.8,
                 stream=False
             )
@@ -181,49 +183,56 @@ if uploaded_file is not None:
     if defects:
         st.subheader("📊 Structural Defect Inventory")
         
-        # Professional defect table
-        st.write("**Defect Classification Summary:**")
-        defect_data = []
+        # Group defects by type for better presentation
+        defect_counts = {}
+        for defect in defects:
+            defect_type = defect['type']
+            defect_counts[defect_type] = defect_counts.get(defect_type, 0) + 1
+        
+        st.write("**Defect Type Summary:**")
+        for defect_type, count in defect_counts.items():
+            st.write(f"• **{defect_type}**: {count} instance(s) detected")
+        
+        # Show individual defects in a detailed table
+        st.write("**Individual Defect Details:**")
         for i, defect in enumerate(defects, 1):
-            defect_data.append({
-                "Defect #": i,
-                "Type": defect['type'],
-                "Confidence": f"{defect['confidence']*100:.1f}%",
-                "Severity": "To be assessed"  # Placeholder for engineering assessment
-            })
-        
-        # Show defects in a professional table format
-        for defect in defect_data:
-            st.write(f"**{defect['Defect #']}. {defect['Type']}** - Confidence: {defect['Confidence']}")
-        
-        # Prepare defect information for engineering analysis
-        defects_info = "\n".join([
-            f"- {d['type']} (detection confidence: {d['confidence']:.2f})"
-            for d in defects
-        ])
+            st.write(f"{i}. **{defect['type']}** - Detection confidence: {defect['confidence']*100:.1f}%")
         
         # Get and display professional engineering analysis
-        st.subheader("🧠 Professional Engineering Assessment")
-        with st.spinner("Generating comprehensive structural analysis..."):
-            analysis = get_llm_commentary(defects_info)
+        st.subheader("🧠 Defect-Specific Engineering Assessment")
+        with st.spinner("Generating comprehensive defect-type analysis..."):
+            analysis = get_llm_commentary(defects)
         
         st.write(analysis)
         
-        # Add technical references
-        with st.expander("📚 Technical References & Standards"):
+        # Add technical references with defect-specific information
+        with st.expander("📚 Technical References & Defect Classification"):
             st.write("""
-            **Relevant Engineering Standards:**
-            - ACI 201.1R: Guide for Conducting a Visual Inspection of Concrete in Service
-            - ACI 224R: Control of Cracking in Concrete Structures
-            - ACI 364.1R: Guide for Evaluation of Concrete Structures Prior to Rehabilitation
-            - EN 1504: Products and systems for the protection and repair of concrete structures
-            - ASTM C856: Standard Practice for Petrographic Examination of Hardened Concrete
+            **Common Concrete Defect Types:**
             
-            **Severity Classification:**
-            - **Minor**: Cosmetic issues, no structural impact
-            - **Moderate**: Requires monitoring, may need non-structural repairs
-            - **Severe**: Structural capacity affected, requires engineering intervention
-            - **Critical**: Immediate safety risk, requires urgent structural repairs
+            **Cracks:**
+            - **Hairline cracks**: < 0.1mm width, typically cosmetic
+            - **Fine cracks**: 0.1-0.3mm, may indicate early stage issues
+            - **Medium cracks**: 0.3-1.0mm, require monitoring and possible repair
+            - **Wide cracks**: > 1.0mm, structural concern requiring intervention
+            
+            **Spalling:**
+            - **Surface spalling**: Cosmetic, limited depth
+            - **Moderate spalling**: Exposed aggregate, some reinforcement visible
+            - **Severe spalling**: Significant concrete loss, reinforcement exposed
+            - **Delamination**: Subsurface separation, detectable by sounding
+            
+            **Corrosion:**
+            - **Surface staining**: Early warning signs
+            - **Active corrosion**: Rust formation and expansion
+            - **Section loss**: Reduction in reinforcement cross-section
+            - **Advanced deterioration**: Significant structural compromise
+            
+            **Relevant Standards:**
+            - ACI 201.1R: Guide for Concrete Inspection
+            - ACI 224R: Crack Control in Concrete Structures
+            - ACI 364.1R: Evaluation Prior to Rehabilitation
+            - EN 1504: Concrete Protection and Repair
             """)
         
     else:
